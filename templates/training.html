@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Retail AI - Admin Training</title>
+    <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; }
+        .navbar { background: #2c3e50; color: white; padding: 1rem 2rem; display: flex; justify-content: space-between; align-items: center; }
+        .navbar h1 { font-size: 1.5rem; }
+        .admin-badge { background: #e74c3c; color: white; padding: 0.25rem 0.75rem; border-radius: 4px; font-size: 0.8rem; font-weight: bold; }
+        .nav-links a { color: white; text-decoration: none; padding: 0.5rem 1rem; border-radius: 4px; transition: background 0.3s; }
+        .container { max-width: 1200px; margin: 2rem auto; padding: 0 2rem; }
+        .training-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; }
+        @media (max-width: 768px) { .training-grid { grid-template-columns: 1fr; } }
+        .card { background: white; border-radius: 12px; padding: 1.5rem; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+        .card h2 { color: #2c3e50; margin-bottom: 1rem; font-size: 1.25rem; }
+        .form-group { margin-bottom: 1.5rem; }
+        label { display: block; margin-bottom: 0.5rem; color: #333; font-weight: 500; }
+        select, input[type="number"] { width: 100%; padding: 0.75rem; border: 2px solid #e0e0e0; border-radius: 6px; font-size: 1rem; }
+        .btn { padding: 0.75rem 1.5rem; border: none; border-radius: 6px; cursor: pointer; font-size: 1rem; font-weight: 600; transition: all 0.3s; margin-right: 0.5rem; }
+        .btn-primary { background: #3498db; color: white; }
+        .btn-primary:hover { background: #2980b9; }
+        .btn-primary:disabled { background: #95a5a6; cursor: not-allowed; }
+        .btn-danger { background: #e74c3c; color: white; }
+        .btn-danger:hover { background: #c0392b; }
+        .progress-container { margin: 2rem 0; }
+        .progress-bar { width: 100%; height: 30px; background: #ecf0f1; border-radius: 15px; overflow: hidden; position: relative; }
+        .progress-fill { height: 100%; background: linear-gradient(90deg, #3498db, #2ecc71); transition: width 0.3s ease; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; }
+        .metrics-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; margin-top: 1.5rem; }
+        .metric-card { background: #f8f9fa; padding: 1rem; border-radius: 8px; text-align: center; }
+        .metric-value { font-size: 1.5rem; font-weight: bold; color: #2c3e50; }
+        .metric-label { font-size: 0.875rem; color: #7f8c8d; margin-top: 0.25rem; }
+        .status-message { padding: 1rem; border-radius: 6px; margin-top: 1rem; font-weight: 500; }
+        .status-idle { background: #ecf0f1; color: #7f8c8d; }
+        .status-training { background: #d4edda; color: #155724; }
+        .info-box { background: #e3f2fd; border-left: 4px solid #3498db; padding: 1rem; margin-bottom: 1.5rem; border-radius: 4px; }
+        .info-box h4 { color: #2980b9; margin-bottom: 0.5rem; }
+        .log-output { background: #2c3e50; color: #ecf0f1; padding: 1rem; border-radius: 6px; font-family: 'Courier New', monospace; font-size: 0.875rem; max-height: 200px; overflow-y: auto; margin-top: 1rem; }
+    </style>
+</head>
+<body>
+    <div class="navbar">
+        <h1>Admin: AI Training Center</h1>
+        <div class="nav-links">
+            <span class="admin-badge">ADMIN ONLY</span>
+            <a href="/dashboard">Back to Dashboard</a>
+            <a href="/logout">Logout</a>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="training-grid">
+            <div class="card">
+                <h2>Training Configuration</h2>
+                <div class="info-box">
+                    <h4>Training Types:</h4>
+                    <ul style="margin-left:1.5rem; color:#555;">
+                        <li><strong>Object Detection:</strong> Train YOLOv8 to detect people</li>
+                        <li><strong>Classification:</strong> Train ResNet50 for employee/customer</li>
+                    </ul>
+                </div>
+                <div class="form-group">
+                    <label>Training Type</label>
+                    <select id="trainingType">
+                        <option value="detection">Object Detection (YOLOv8)</option>
+                        <option value="classification">Classification (ResNet50)</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Number of Epochs</label>
+                    <input type="number" id="epochs" min="1" max="100" value="10">
+                </div>
+                <div>
+                    <button class="btn btn-primary" id="startBtn" onclick="startTraining()">Start Training</button>
+                    <button class="btn btn-danger" id="stopBtn" onclick="stopTraining()" style="display:none;">Stop Training</button>
+                </div>
+                <div id="statusMsg" class="status-message status-idle">Ready to start training</div>
+            </div>
+
+            <div class="card">
+                <h2>Training Progress</h2>
+                <div class="progress-container">
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="progressBar" style="width: 0%">0%</div>
+                    </div>
+                </div>
+                <div class="metrics-grid">
+                    <div class="metric-card">
+                        <div class="metric-value" id="epochVal">0</div>
+                        <div class="metric-label">Current Epoch</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value" id="totalEpochs">0</div>
+                        <div class="metric-label">Total Epochs</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value" id="lossVal">0.0000</div>
+                        <div class="metric-label">Loss</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value" id="accVal">0.00%</div>
+                        <div class="metric-label">Accuracy</div>
+                    </div>
+                </div>
+                <div class="log-output" id="logOutput">Waiting for training to start...</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let statusInterval = null;
+        let logs = [];
+
+        async function startTraining() {
+            const type = document.getElementById('trainingType').value;
+            const epochs = document.getElementById('epochs').value;
+            
+            try {
+                const response = await axios.post('/api/training/start', { type, epochs });
+                if (response.data.success) {
+                    document.getElementById('startBtn').style.display = 'none';
+                    document.getElementById('stopBtn').style.display = 'inline-block';
+                    document.getElementById('trainingType').disabled = true;
+                    document.getElementById('epochs').disabled = true;
+                    startPolling();
+                }
+            } catch (err) { alert('Failed to start training'); }
+        }
+
+        async function stopTraining() {
+            try {
+                await axios.post('/api/training/stop');
+                document.getElementById('startBtn').style.display = 'inline-block';
+                document.getElementById('stopBtn').style.display = 'none';
+                document.getElementById('trainingType').disabled = false;
+                document.getElementById('epochs').disabled = false;
+            } catch (err) { alert('Failed to stop'); }
+        }
+
+        function startPolling() {
+            statusInterval = setInterval(async () => {
+                try {
+                    const response = await axios.get('/api/training/status');
+                    const data = response.data;
+                    
+                    document.getElementById('progressBar').style.width = data.progress + '%';
+                    document.getElementById('progressBar').textContent = data.progress + '%';
+                    document.getElementById('epochVal').textContent = data.epoch;
+                    document.getElementById('totalEpochs').textContent = data.total_epochs;
+                    document.getElementById('lossVal').textContent = data.loss.toFixed(4);
+                    document.getElementById('accVal').textContent = data.accuracy.toFixed(2) + '%';
+                    
+                    const statusMsg = document.getElementById('statusMsg');
+                    statusMsg.textContent = data.message;
+                    statusMsg.className = 'status-message ' + (data.is_training ? 'status-training' : 'status-idle');
+                    
+                    if (data.message) {
+                        logs.push(`[${new Date().toLocaleTimeString()}] ${data.message}`);
+                        document.getElementById('logOutput').innerHTML = logs.slice(-5).join('<br>');
+                    }
+                    
+                    if (!data.is_training) {
+                        document.getElementById('startBtn').style.display = 'inline-block';
+                        document.getElementById('stopBtn').style.display = 'none';
+                        document.getElementById('trainingType').disabled = false;
+                        document.getElementById('epochs').disabled = false;
+                        clearInterval(statusInterval);
+                    }
+                } catch (err) { console.error('Status check failed'); }
+            }, 1000);
+        }
+    </script>
+</body>
+</html>
