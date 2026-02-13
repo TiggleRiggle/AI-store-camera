@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Retail AI - Dashboard</title>
+    <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; }
+        .navbar { background: #2c3e50; color: white; padding: 1rem 2rem; display: flex; justify-content: space-between; align-items: center; }
+        .navbar h1 { font-size: 1.5rem; }
+        .nav-links { display: flex; gap: 1.5rem; align-items: center; }
+        .nav-links a { color: white; text-decoration: none; padding: 0.5rem 1rem; border-radius: 4px; }
+        .nav-links a.admin-link { background: #e74c3c; }
+        .logout-btn { background: #e74c3c; color: white; border: none; padding: 0.5rem 1rem; border-radius: 4px; cursor: pointer; text-decoration: none; }
+        .container { max-width: 1400px; margin: 2rem auto; padding: 0 2rem; }
+        .dashboard-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 2rem; }
+        .card { background: white; border-radius: 12px; padding: 1.5rem; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+        .card h2 { color: #2c3e50; margin-bottom: 1rem; }
+        .btn { padding: 0.75rem 1.5rem; border: none; border-radius: 6px; cursor: pointer; font-size: 0.9rem; margin-right: 0.5rem; }
+        .btn-primary { background: #3498db; color: white; }
+        .btn-success { background: #27ae60; color: white; }
+        .btn-danger { background: #e74c3c; color: white; }
+        .camera-preview { width: 100%; height: 300px; background: #000; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: white; margin-top: 1rem; overflow: hidden; }
+        .camera-preview img { width: 100%; height: 100%; object-fit: cover; }
+        .status { padding: 0.5rem 1rem; border-radius: 4px; font-size: 0.875rem; margin-top: 0.5rem; }
+        .status-connected { background: #d4edda; color: #155724; }
+        .status-disconnected { background: #f8d7da; color: #721c24; }
+        .form-group { margin-bottom: 1rem; }
+        label { display: block; margin-bottom: 0.5rem; font-weight: 500; }
+        select, input { width: 100%; padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px; }
+        .hidden { display: none; }
+        #zoneCanvas { border: 2px solid #ddd; border-radius: 8px; cursor: crosshair; max-width: 100%; display: none; }
+        .zone-item { display: flex; justify-content: space-between; align-items: center; padding: 0.5rem; background: #f8f9fa; border-radius: 4px; margin-bottom: 0.5rem; }
+        .instructions { background: #e3f2fd; padding: 1rem; border-radius: 6px; margin-bottom: 1rem; font-size: 0.875rem; }
+    </style>
+</head>
+<body>
+    <div class="navbar">
+        <h1>Retail AI Platform</h1>
+        <div class="nav-links">
+            <a href="#camera">Camera</a>
+            <a href="#zones">Zones</a>
+            {% if is_admin %}<a href="/training" class="admin-link">AI Training</a>{% endif %}
+            <a href="/logout" class="logout-btn">Logout</a>
+        </div>
+    </div>
+    <div class="container">
+        <div class="dashboard-grid">
+            <div class="card" id="camera">
+                <h2>Camera Connection</h2>
+                <div class="form-group">
+                    <label>Camera Type</label>
+                    <select id="camType" onchange="toggleCamType()">
+                        <option value="usb">USB Webcam</option>
+                        <option value="ip">IP / RTSP Camera</option>
+                    </select>
+                </div>
+                <div id="usbOptions">
+                    <div class="form-group">
+                        <label>Camera ID</label>
+                        <select id="camId">
+                            <option value="0">Camera 0</option>
+                            <option value="1">Camera 1</option>
+                            <option value="2">Camera 2</option>
+                            <option value="3">Camera 3</option>
+                        </select>
+                    </div>
+                </div>
+                <div id="ipOptions" class="hidden">
+                    <div class="form-group">
+                        <label>Camera URL</label>
+                        <input type="text" id="ipUrl" placeholder="rtsp://username:password@192.168.1.100:554/stream">
+                    </div>
+                </div>
+                <div>
+                    <button class="btn btn-success" onclick="connectCamera()" id="connectBtn">Connect Camera</button>
+                    <button class="btn btn-danger" onclick="disconnectCamera()" id="disconnectBtn" style="display:none;">Disconnect</button>
+                </div>
+                <div id="camStatus" class="status status-disconnected">Status: Disconnected</div>
+                <div class="camera-preview" id="previewContainer">
+                    <span id="previewText">No camera connected</span>
+                    <img id="previewImg" style="display:none;">
+                </div>
+            </div>
+            <div class="card" id="zones">
+                <h2>Zone Calibration</h2>
+                <div class="instructions">
+                    <strong>Instructions:</strong><br>1. Upload a photo of your store<br>2. Click and drag to draw zones<br>3. Name each zone
+                </div>
+                <div class="form-group">
+                    <input type="file" accept="image/*" onchange="handleImageUpload(event)" id="zoneImage" style="display:none;">
+                    <label for="zoneImage" class="btn btn-primary" style="cursor:pointer; display:inline-block;">Upload Store Photo</label>
+                </div>
+                <canvas id="zoneCanvas"></canvas>
+                <div id="zonePlaceholder" style="padding:3rem; text-align:center; color:#999; background:#f5f5f5; border-radius:8px;">Upload a photo to start calibrating zones</div>
+                <div class="zone-list" id="zoneList">
+                    <h3>Defined Zones (<span id="zoneCount">0</span>):</h3>
+                    <div id="zonesContainer"></div>
+                </div>
+                <button class="btn btn-success" onclick="saveZones()" style="margin-top:1rem;">Save Zones</button>
+            </div>
+        </div>
+    </div>
+    <script>
+        let isConnected = false, previewInterval = null, zones = [], currentZone = null, isDrawing = false, startPos = null, bgImage = null;
+        const canvas = document.getElementById('zoneCanvas'), ctx = canvas.getContext('2d');
+        
+        function toggleCamType() {
+            const type = document.getElementById('camType').value;
+            document.getElementById('usbOptions').classList.toggle('hidden', type !== 'usb');
+            document.getElementById('ipOptions').classList.toggle('hidden', type !== 'ip');
+        }
+        
+        async function connectCamera() {
+            const type = document.getElementById('camType').value;
+            const data = type === 'usb' ? { type: 'usb', camera_id: parseInt(document.getElementById('camId').value) } : { type: 'ip', url: document.getElementById('ipUrl').value };
+            try {
+                const response = await axios.post('/api/camera/connect', data);
+                if (response.data.success) {
+                    isConnected = true;
+                    document.getElementById('connectBtn').style.display = 'none';
+                    document.getElementById('disconnectBtn').style.display = 'inline-block';
+                    document.getElementById('camStatus').className = 'status status-connected';
+                    document.getElementById('camStatus').textContent = 'Status: Connected';
+                    startPreview();
+                } else { alert(response.data.message); }
+            } catch (err) { alert('Connection failed'); }
+        }
+        
+        async function disconnectCamera() {
+            try {
+                await axios.post('/api/camera/disconnect');
+                isConnected = false;
+                document.getElementById('connectBtn').style.display = 'inline-block';
+                document.getElementById('disconnectBtn').style.display = 'none';
+                document.getElementById('camStatus').className = 'status status-disconnected';
+                document.getElementById('camStatus').textContent = 'Status: Disconnected';
+                clearInterval(previewInterval);
+                document.getElementById('previewText').style.display = 'block';
+                document.getElementById('previewImg').style.display = 'none';
+            } catch (err) { alert('Disconnect failed'); }
+        }
+        
+        function startPreview() {
+            previewInterval = setInterval(async () => {
+                try {
+                    const response = await axios.get('/api/camera/frame');
+                    if (response.data.success) {
+                        document.getElementById('previewText').style.display = 'none';
+                        document.getElementById('previewImg').src = 'data:image/jpeg;base64,' + response.data.frame;
+                        document.getElementById('previewImg').style.display = 'block';
+                    }
+                } catch (err) { console.error('Preview failed'); }
+            }, 200);
+        }
+        
+        function handleImageUpload(e) {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    bgImage = new Image();
+                    bgImage.onload = () => {
+                        canvas.width = bgImage.width;
+                        canvas.height = bgImage.height;
+                        canvas.style.display = 'block';
+                        document.getElementById('zonePlaceholder').style.display = 'none';
+                        drawZones();
+                    };
+                    bgImage.src = event.target.result;
+                };
+                reader.readAsDataURL(file);
+            }
+        }
+        
+        canvas.addEventListener('mousedown', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            startPos = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+            isDrawing = true;
+            currentZone = [startPos.x, startPos.y, startPos.x, startPos.y];
+        });
+        
+        canvas.addEventListener('mousemove', (e) => {
+            if (!isDrawing) return;
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left, y = e.clientY - rect.top;
+            currentZone = [Math.min(startPos.x, x), Math.min(startPos.y, y), Math.max(startPos.x, x), Math.max(startPos.y, y)];
+            drawZones();
+        });
+        
+        canvas.addEventListener('mouseup', () => {
+            if (!isDrawing) return;
+            isDrawing = false;
+            const name = prompt('Enter zone name (e.g., entrance, checkout):');
+            if (name) { zones.push({ name, coords: currentZone }); updateZoneList(); }
+            currentZone = null;
+            drawZones();
+        });
+        
+        function drawZones() {
+            if (!bgImage) return;
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(bgImage, 0, 0);
+            zones.forEach((zone) => {
+                const [x1, y1, x2, y2] = zone.coords;
+                ctx.strokeStyle = '#27ae60'; ctx.lineWidth = 3;
+                ctx.strokeRect(x1, y1, x2 - x1, y2 - y1);
+                ctx.fillStyle = 'rgba(39, 174, 96, 0.2)';
+                ctx.fillRect(x1, y1, x2 - x1, y2 - y1);
+                ctx.fillStyle = '#fff'; ctx.font = 'bold 16px Arial';
+                ctx.fillText(zone.name, x1 + 5, y1 + 20);
+            });
+            if (currentZone) {
+                const [x1, y1, x2, y2] = currentZone;
+                ctx.strokeStyle = '#3498db'; ctx.setLineDash([5, 5]);
+                ctx.strokeRect(x1, y1, x2 - x1, y2 - y1); ctx.setLineDash([]);
+            }
+        }
+        
+        function updateZoneList() {
+            document.getElementById('zoneCount').textContent = zones.length;
+            document.getElementById('zonesContainer').innerHTML = zones.map((zone, idx) => `
+                <div class="zone-item">
+                    <span><span style="width:20px; height:20px; background:#27ae60; border-radius:4px; margin-right:0.5rem; display:inline-block;"></span>${zone.name}</span>
+                    <button class="btn btn-danger" style="padding:0.25rem 0.5rem; font-size:0.8rem;" onclick="deleteZone(${idx})">Delete</button>
+                </div>
+            `).join('');
+        }
+        
+        function deleteZone(idx) { zones.splice(idx, 1); updateZoneList(); drawZones(); }
+        
+        async function saveZones() {
+            try { await axios.post('/api/zones/save', { zones }); alert('Zones saved!'); }
+            catch (err) { alert('Failed to save'); }
+        }
+        
+        async function loadZones() {
+            try {
+                const response = await axios.get('/api/zones/load');
+                if (response.data.zones) { zones = response.data.zones; updateZoneList(); }
+            } catch (err) { console.error('Failed to load'); }
+        }
+        
+        loadZones();
+    </script>
+</body>
+</html>
